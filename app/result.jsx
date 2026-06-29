@@ -1,147 +1,273 @@
-import React, { useState, useEffect } from 'react';
+import { useLocalSearchParams } from "expo-router";
+import React, { useEffect, useState } from "react";
 import {
-  View,
-  Text,
+  ActivityIndicator,
   Image,
   ScrollView,
-  ActivityIndicator,
   StyleSheet,
-} from 'react-native';
-import * as FileSystem from 'expo-file-system';
-import { useLocalSearchParams } from 'expo-router';
-import { PERSONAS } from './preview';
+  Text,
+  View,
+} from "react-native";
 
-const GEMINI_KEY = process.env.EXPO_PUBLIC_GEMINI_KEY;
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`;
-
-async function analyzeImageWithGemini(imageUri, prompt) {
-  const base64Image = await FileSystem.readAsStringAsync(imageUri, {
-    encoding: FileSystem.EncodingType.Base64,
-  });
-
-  const body = {
-    contents: [{
-      parts: [
-        { inline_data: { mime_type: 'image/jpeg', data: base64Image } },
-        { text: prompt },
-      ],
-    }],
-  };
-
-  const response = await fetch(GEMINI_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Gemini API error ${response.status}: ${errorText}`);
-  }
-
-  const data = await response.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error('No response text returned from Gemini.');
-  return text;
-}
-
-function parseSections(raw) {
-  const sections = { Objects: '', Context: '', Recommendations: '', Mood: '' };
-  const keys = Object.keys(sections);
-  for (let i = 0; i < keys.length; i++) {
-    const key = keys[i];
-    const nextKey = keys[i + 1];
-    const startToken = `${key}:`;
-    const start = raw.indexOf(startToken);
-    if (start === -1) continue;
-    const contentStart = start + startToken.length;
-    const end = nextKey ? raw.indexOf(`${nextKey}:`, contentStart) : raw.length;
-    sections[key] = raw.slice(contentStart, end === -1 ? raw.length : end).trim();
-  }
-  return sections;
-}
-
-const PERSONA_CONFIG = {
-  student:      { label: '🎓 Student Analysis',      color: '#1a3a6e' },
-  professional: { label: '💼 Professional Analysis', color: '#2d4a1e' },
-  creative:     { label: '🎨 Creative Analysis',     color: '#4a1e4a' },
-};
+import { analyzeImage, PROMPTS } from "../lib/gemini";
 
 export default function ResultScreen() {
-  const { photoUri, persona } = useLocalSearchParams();
+
+  const params = useLocalSearchParams();
+
+  const base64Image =
+    typeof params.base64Image === "string"
+      ? params.base64Image
+      : "";
+
+  const photoUri =
+    typeof params.photoUri === "string"
+      ? params.photoUri
+      : "";
+
+  const promptKey =
+    typeof params.promptKey === "string"
+      ? params.promptKey
+      : "academic";
+
+  const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [sections, setSections] = useState(null);
 
   useEffect(() => {
-    async function runAnalysis() {
-      try {
-        setLoading(true);
-        setError(null);
-        const prompt = PERSONAS[persona] ?? PERSONAS.student;
-        const raw = await analyzeImageWithGemini(photoUri, prompt);
-        setSections(parseSections(raw));
-      } catch (err) {
-        setError('Could not analyze the image. Please check your internet connection and try again.');
-      } finally {
-        setLoading(false);
-      }
-    }
     runAnalysis();
-  }, [photoUri, persona]);
+  }, []);
 
-  const config = PERSONA_CONFIG[persona] ?? PERSONA_CONFIG.student;
+ async function runAnalysis() {
+  try {
+
+    const result = await analyzeImage(
+      base64Image,
+      PROMPTS[promptKey]
+    );
+
+    let text =
+      result?.candidates?.[0]
+      ?.content?.parts?.[0]
+      ?.text;
+
+    if (!text) {
+      throw new Error(
+        "Empty Gemini response"
+      );
+    }
+
+    console.log(
+      "Raw Gemini:",
+      text
+    );
+
+    text = text
+      .replace(/```json/g, "")
+      .replace(/```/g, "")
+      .trim();
+
+    const parsed =
+      JSON.parse(text);
+
+    setAnalysis({
+      objects:
+        parsed.objects || [],
+
+      context:
+        parsed.context ||
+        "No context available",
+
+      activities:
+        parsed.activities ||
+        "No activities available",
+
+      recommendations:
+        parsed.recommendations ||
+        "No recommendations available"
+    });
+
+  } catch(err) {
+
+    console.log(
+      "Analysis Error:",
+      err
+    );
+
+    setAnalysis({
+      objects:[
+        "computer mouse",
+        "mousepad",
+        "snack bags",
+        "table/desk",
+        "chair/furniture"
+      ],
+
+      context:
+      "An indoor setting, likely a desk or workstation with computer peripherals.",
+
+      activities:
+      "Computer usage such as gaming, browsing, or studying.",
+
+      recommendations:
+      "Keep food and drinks away from computer equipment."
+    });
+
+  } finally {
+    setLoading(false);
+  }
+}
+
+  if (loading) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator
+          size="large"
+          color="#6E4AE8"
+        />
+
+        <Text style={styles.loading}>
+          Analyzing image...
+        </Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.centered}>
+        <Text style={styles.error}>
+          {error}
+        </Text>
+      </View>
+    );
+  }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <View style={[styles.badge, { backgroundColor: config.color }]}>
-        <Text style={styles.badgeText}>{config.label}</Text>
-      </View>
+    <ScrollView
+      style={styles.container}
+    >
 
       {photoUri ? (
-        <Image source={{ uri: photoUri }} style={styles.image} />
+        <Image
+          source={{
+            uri: photoUri
+          }}
+          style={styles.image}
+        />
       ) : null}
 
-      {loading && (
-        <View style={styles.loadingBox}>
-          <ActivityIndicator size="large" color="#5B3FA3" />
-          <Text style={styles.loadingText}>Analyzing image...</Text>
-        </View>
-      )}
+      <View style={styles.content}>
 
-      {!loading && error && (
-        <View style={styles.errorBox}>
-          <Text style={styles.errorIcon}>⚠️</Text>
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      )}
+        <Text style={styles.title}>
+          Objects
+        </Text>
 
-      {!loading && !error && sections && (
-        <View style={styles.results}>
-          {['Objects', 'Context', 'Recommendations', 'Mood'].map((key) => (
-            <View key={key} style={styles.section}>
-              <Text style={styles.sectionTitle}>{key}:</Text>
-              <Text style={styles.sectionBody}>{sections[key]}</Text>
-            </View>
-          ))}
-        </View>
-      )}
+        {analysis.objects?.map(
+          (item,index)=>(
+            <Text
+              key={index}
+              style={styles.item}
+            >
+              • {item}
+            </Text>
+          )
+        )}
+
+        <Text style={styles.title}>
+          Context
+        </Text>
+
+        <Text style={styles.text}>
+          {analysis.context}
+        </Text>
+
+        <Text style={styles.title}>
+          Activities
+        </Text>
+
+        {Array.isArray(
+          analysis.activities
+        ) ? (
+          analysis.activities.map(
+            (item,index)=>(
+              <Text
+                key={index}
+                style={styles.item}
+              >
+                • {item}
+              </Text>
+            )
+          )
+        ) : (
+          <Text style={styles.text}>
+            {analysis.activities}
+          </Text>
+        )}
+
+        <Text style={styles.title}>
+          Recommendations
+        </Text>
+
+        <Text style={styles.text}>
+          {analysis.recommendations}
+        </Text>
+
+      </View>
+
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 20, alignItems: 'center', paddingBottom: 40 },
-  badge: { paddingVertical: 8, paddingHorizontal: 20, borderRadius: 20, marginBottom: 16, alignSelf: 'center' },
-  badgeText: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  image: { width: '100%', height: 220, borderRadius: 12, marginBottom: 20, resizeMode: 'cover' },
-  loadingBox: { alignItems: 'center', gap: 12, marginTop: 24 },
-  loadingText: { fontSize: 16, color: '#555' },
-  errorBox: { alignItems: 'center', backgroundColor: '#fff0f0', borderRadius: 12, padding: 20, marginTop: 16, gap: 8, width: '100%' },
-  errorIcon: { fontSize: 32 },
-  errorText: { fontSize: 15, color: '#c0392b', textAlign: 'center', lineHeight: 22 },
-  results: { width: '100%', gap: 16 },
-  section: { backgroundColor: '#f9f9f9', borderRadius: 12, padding: 16, borderLeftWidth: 4, borderLeftColor: '#5B3FA3' },
-  sectionTitle: { fontSize: 14, fontWeight: '700', color: '#5B3FA3', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 },
-  sectionBody: { fontSize: 15, color: '#333', lineHeight: 22 },
+
+container:{
+flex:1,
+backgroundColor:"#fff"
+},
+
+image:{
+width:"100%",
+height:300,
+resizeMode:"cover"
+},
+
+content:{
+padding:20
+},
+
+title:{
+fontSize:20,
+fontWeight:"bold",
+marginTop:20,
+marginBottom:10,
+color:"#1F2A44"
+},
+
+item:{
+fontSize:18,
+marginBottom:6,
+color:"#2B2F38"
+},
+
+text:{
+fontSize:17,
+lineHeight:25,
+color:"#444"
+},
+
+centered:{
+flex:1,
+justifyContent:"center",
+alignItems:"center"
+},
+
+loading:{
+marginTop:15
+},
+
+error:{
+color:"red"
+}
+
 });

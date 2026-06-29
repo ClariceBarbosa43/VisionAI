@@ -1,82 +1,58 @@
+import { router, useLocalSearchParams } from "expo-router";
+import React from "react";
 import {
-  View,
   Image,
-  TouchableOpacity,
-  Text,
   StyleSheet,
-} from 'react-native';
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
-import {
-  router,
-  useLocalSearchParams,
-} from 'expo-router';
-
-// ─── Persona Prompts ────────────────────────────────────────────────────────
-// Prompt wording is a first-class design decision: the same image produces
-// three very different analyses because each prompt tells the AI what to
-// notice, what vocabulary to use, and what to recommend.
-const PERSONAS = {
-  student: `You are an academic study assistant. Analyze this image and respond
-in exactly this format:
-
-Objects:
-• [list each visible object, one per bullet]
-
-Context:
-[One sentence describing the study or learning situation shown]
-
-Recommendations:
-[Two to three practical study tips based on what you see]
-
-Mood:
-[One word describing the energy or atmosphere]`,
-
-  professional: `You are a productivity consultant. Analyze this image and respond
-in exactly this format:
-
-Objects:
-• [list each visible item in the workspace, one per bullet]
-
-Context:
-[One sentence describing the work environment or task visible]
-
-Recommendations:
-[Two to three actionable productivity improvements based on what you see]
-
-Mood:
-[One word describing the workspace atmosphere]`,
-
-  creative: `You are a creative director with an artistic eye. Analyze this image
-and respond in exactly this format:
-
-Objects:
-• [list visible elements using evocative, descriptive language, one per bullet]
-
-Context:
-[One sentence interpreting the mood, story, or feeling of the scene]
-
-Recommendations:
-[Two to three creative ideas or inspirations sparked by what you see]
-
-Mood:
-[One word capturing the artistic essence of the image]`,
-};
+import { imageToBase64 } from "../lib/gemini";
 
 export default function PreviewScreen() {
-  const { photoUri } = useLocalSearchParams();
+  const params = useLocalSearchParams();
 
-  function navigateToResult(persona) {
-    router.push({
-      pathname: '/result',
-      params: {
-        photoUri,
-        persona,
-      },
-    });
+  const photoUri =
+    typeof params.photoUri === "string"
+      ? params.photoUri
+      : "";
+
+  async function handleAnalyze(promptKey) {
+    try {
+      if (!photoUri) {
+        console.log("No photo found");
+        return;
+      }
+
+      const base64Image =
+        await imageToBase64(photoUri);
+
+      console.log(
+        "Base64 Length:",
+        base64Image.length
+      );
+
+     router.push({
+  pathname:"/result",
+  params:{
+    base64Image,
+    photoUri,
+    promptKey
+  }
+})
+
+    } catch (error) {
+      console.log(
+        "Analyze Error:",
+        error
+      );
+    }
   }
 
   return (
     <View style={styles.container}>
+
       <Image
         source={{ uri: photoUri }}
         style={styles.preview}
@@ -84,124 +60,113 @@ export default function PreviewScreen() {
 
       <View style={styles.bottomPanel}>
 
-        {/* RETAKE */}
         <TouchableOpacity
-          style={styles.retake}
+          style={styles.retakeButton}
           onPress={() => router.back()}
         >
-          <Text style={styles.retakeText}>↩ Retake</Text>
+          <Text style={styles.buttonText}>
+            Retake
+          </Text>
         </TouchableOpacity>
 
-        <Text style={styles.label}>Analyze as:</Text>
+        <Text style={styles.label}>
+          Select Analysis:
+        </Text>
 
-        {/* PERSONA BUTTONS */}
         <View style={styles.personaRow}>
 
           <TouchableOpacity
-            style={[styles.personaBtn, styles.student]}
-            onPress={() => navigateToResult('student')}
+            style={styles.analyzeButton}
+            onPress={() =>
+              handleAnalyze("academic")
+            }
           >
-            <Text style={styles.personaIcon}>🎓</Text>
-            <Text style={styles.personaText}>Student</Text>
+            <Text style={styles.buttonText}>
+              Academic
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.personaBtn, styles.professional]}
-            onPress={() => navigateToResult('professional')}
+            style={styles.analyzeButton}
+            onPress={() =>
+              handleAnalyze("safety")
+            }
           >
-            <Text style={styles.personaIcon}>💼</Text>
-            <Text style={styles.personaText}>Professional</Text>
+            <Text style={styles.buttonText}>
+              Safety
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.personaBtn, styles.creative]}
-            onPress={() => navigateToResult('creative')}
+            style={styles.analyzeButton}
+            onPress={() =>
+              handleAnalyze("inventory")
+            }
           >
-            <Text style={styles.personaIcon}>🎨</Text>
-            <Text style={styles.personaText}>Creative</Text>
+            <Text style={styles.buttonText}>
+              Inventory
+            </Text>
           </TouchableOpacity>
 
         </View>
+
       </View>
+
     </View>
   );
 }
 
-// Export prompts so result.jsx can use them without touching this file
-export { PERSONAS };
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: "#000",
   },
 
   preview: {
     flex: 1,
-    resizeMode: 'contain',
+    resizeMode: "contain",
   },
 
   bottomPanel: {
-    backgroundColor: '#111',
+    backgroundColor: "#111",
     padding: 20,
-    paddingBottom: 36,
-    gap: 12,
-  },
-
-  retake: {
-    alignSelf: 'flex-start',
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#555',
-  },
-
-  retakeText: {
-    color: '#aaa',
-    fontSize: 14,
   },
 
   label: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '500',
-    marginTop: 4,
-    marginBottom: 4,
+    color: "#fff",
+    fontSize: 16,
+    marginBottom: 15,
+    fontWeight: "600",
   },
 
   personaRow: {
-    flexDirection: 'row',
-    gap: 10,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 10,
   },
 
-  personaBtn: {
-    flex: 1,
-    alignItems: 'center',
+  retakeButton: {
+    backgroundColor: "#5A6472",
     paddingVertical: 14,
-    borderRadius: 12,
-    gap: 6,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    marginBottom: 20,
+    alignSelf: "center",
   },
 
-  student: {
-    backgroundColor: '#1a3a6e',
+  analyzeButton: {
+    backgroundColor: "#5B3FA3",
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    flex: 1,
+    marginHorizontal: 5,
   },
 
-  professional: {
-    backgroundColor: '#2d4a1e',
-  },
-
-  creative: {
-    backgroundColor: '#4a1e4a',
-  },
-
-  personaIcon: {
-    fontSize: 24,
-  },
-
-  personaText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 13,
+  buttonText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 14,
+    textAlign: "center",
   },
 });
