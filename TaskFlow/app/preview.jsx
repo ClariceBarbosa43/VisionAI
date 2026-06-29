@@ -12,19 +12,18 @@ import {
 } from 'expo-router';
 
 export default function PreviewScreen() {
-  const { photoUri } =
-    useLocalSearchParams();
+  const { photoUri } = useLocalSearchParams();
 
   return (
     <View style={styles.container}>
       <Image
-        source={{
-          uri: decodeURIComponent(photoUri)
-        }}
+        source={{ uri: photoUri }}
         style={styles.preview}
       />
 
       <View style={styles.row}>
+        
+        {/* RETAKE */}
         <TouchableOpacity
           style={styles.retake}
           onPress={() => router.back()}
@@ -34,52 +33,59 @@ export default function PreviewScreen() {
           </Text>
         </TouchableOpacity>
 
+        {/* ANALYZE */}
         <TouchableOpacity
           style={styles.analyze}
           onPress={() =>
-            router.push('/result')
+            router.push({
+              pathname: '/result',
+              params: {
+                photoUri,
+              },
+            })
           }
         >
           <Text style={styles.text}>
             Analyze
           </Text>
         </TouchableOpacity>
+
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container:{
-    flex:1,
-    backgroundColor:'#000'
+  container: {
+    flex: 1,
+    backgroundColor: '#000',
   },
 
-  preview:{
-    flex:1,
-    resizeMode:'contain'
+  preview: {
+    flex: 1,
+    resizeMode: 'contain',
   },
 
-  row:{
-    flexDirection:'row',
-    justifyContent:'space-around',
-    padding:20
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    padding: 20,
   },
 
-  retake:{
-    backgroundColor:'#666',
-    padding:15,
-    borderRadius:10
+  retake: {
+    backgroundColor: '#666',
+    padding: 15,
+    borderRadius: 10,
   },
 
-  analyze:{
-    backgroundColor:'#5B3FA3',
-    padding:15,
-    borderRadius:10
+  analyze: {
+    backgroundColor: '#5B3FA3',
+    padding: 15,
+    borderRadius: 10,
   },
 
-  text:{
-    color:'#fff',
-    fontWeight:'bold'
-  }
+  text: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
 });
